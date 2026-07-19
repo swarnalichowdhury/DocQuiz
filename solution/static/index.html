@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocQuiz</title>
+<style>
+  :root {
+    --ink: #14161f;        /* page background — deep ink */
+    --card: #1d2130;       /* card surface */
+    --card-edge: #2a2f42;
+    --paper: #ece9dd;      /* warm paper-white text */
+    --muted: #8d92a5;
+    --hi: #ffd84d;         /* highlighter yellow — the accent */
+    --right: #3ecf8e;
+    --wrong: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--ink); color: var(--paper);
+    min-height: 100vh; display: flex; justify-content: center;
+    padding: 48px 16px;
+  }
+  .app { width: 100%; max-width: 640px; }
+
+  /* ---------- header ---------- */
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.03em; }
+  h1 .mark { color: var(--hi); }
+  .tagline { color: var(--muted); margin: 6px 0 32px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--card-edge);
+    border-radius: 14px; padding: 28px; margin-bottom: 16px;
+  }
+  .hidden { display: none !important; }
+  button {
+    font: inherit; border: none; border-radius: 9px; cursor: pointer;
+    padding: 12px 20px; background: var(--hi); color: #1a1a10; font-weight: 650;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { filter: none; opacity: 0.55; cursor: default; }
+  button:focus-visible, .dropzone:focus-visible {
+    outline: 2px solid var(--hi); outline-offset: 2px;
+  }
+
+  /* ---------- upload ---------- */
+  .dropzone {
+    border: 2px dashed #3a4058; border-radius: 12px; padding: 36px 20px;
+    text-align: center; color: var(--muted); cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .dropzone.drag { border-color: var(--hi); background: #232841; color: var(--paper); }
+  .dropzone strong { color: var(--paper); font-weight: 600; }
+  .dropzone .file-name { color: var(--hi); font-family: var(--mono); font-size: 0.9rem; }
+  #upload-actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
+  #upload-error { color: var(--wrong); margin-top: 14px; line-height: 1.5; }
+
+  /* ---------- generation pipeline (the signature) ---------- */
+  .pipeline { font-family: var(--mono); font-size: 0.95rem; }
+  .pipeline-title { color: var(--muted); font-family: inherit; margin-bottom: 18px; }
+  .stage { display: flex; align-items: center; gap: 12px; padding: 7px 0; color: var(--muted); }
+  .stage .dot {
+    width: 22px; height: 22px; border-radius: 50%; flex: none;
+    border: 2px solid #3a4058; display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; color: var(--ink);
+  }
+  .stage.active { color: var(--paper); }
+  .stage.active .dot { border-color: var(--hi); animation: pulse 1.1s ease-in-out infinite; }
+  .stage.done { color: var(--paper); }
+  .stage.done .dot { border-color: var(--right); background: var(--right); }
+  .stage.done .dot::after { content: "✓"; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 216, 77, 0.45); }
+    50% { box-shadow: 0 0 0 7px rgba(255, 216, 77, 0); }
+  }
+
+  /* ---------- quiz ---------- */
+  .meta { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+  .tag {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em;
+    padding: 4px 11px; border-radius: 999px; background: #2a2f42; color: var(--muted);
+  }
+  .tag.easy   { color: var(--right); background: rgba(62, 207, 142, 0.12); }
+  .tag.medium { color: var(--hi);    background: rgba(255, 216, 77, 0.10); }
+  .tag.hard   { color: var(--wrong); background: rgba(255, 107, 107, 0.12); }
+  .counter { margin-left: auto; font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+  .question-text { font-size: 1.18rem; line-height: 1.55; font-weight: 600; margin-bottom: 14px; }
+  .option {
+    display: flex; gap: 12px; width: 100%; text-align: left; margin-top: 10px;
+    background: #262b3f; color: var(--paper); font-weight: 500; line-height: 1.4;
+    border: 1px solid transparent;
+  }
+  .option:hover:not(:disabled) { background: #2e3450; filter: none; }
+  .option .key {
+    font-family: var(--mono); color: var(--muted); flex: none;
+  }
+  .option.correct { background: rgba(62, 207, 142, 0.16); border-color: var(--right); }
+  .option.correct .key { color: var(--right); }
+  .option.wrong { background: rgba(255, 107, 107, 0.14); border-color: var(--wrong); }
+  .option.wrong .key { color: var(--wrong); }
+  .keyboard-hint {
+    margin-top: 14px; font-family: var(--mono); font-size: 0.75rem; color: var(--muted);
+  }
+  .explanation {
+    margin-top: 18px; padding: 16px; border-radius: 10px; background: var(--ink);
+    border-left: 3px solid var(--hi); color: #cfccc0; line-height: 1.55;
+  }
+  .explanation strong { color: var(--paper); }
+  .explanation.nailed { border-left-color: var(--right); }
+  #next-btn { margin-top: 18px; }
+
+  /* card entrance */
+  .card.deal { animation: deal 0.28s ease-out; }
+  @keyframes deal {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card.deal { animation: none; }
+    .stage.active .dot { animation: none; }
+  }
+
+  /* ---------- progress / done ---------- */
+  .score-line { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
+  .score-line .pct { color: var(--hi); font-family: var(--mono); }
+  .weak-line { color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+  .weak-line em { color: var(--paper); font-style: normal; font-weight: 600; }
+  .topic-row { margin-top: 12px; }
+  .topic-name {
+    display: flex; justify-content: space-between; font-family: var(--mono);
+    font-size: 0.8rem; color: var(--muted); margin-bottom: 5px;
+  }
+  .bar { height: 8px; border-radius: 4px; background: #2a2f42; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--right); transition: width 0.4s ease; }
+  .bar-fill.low { background: var(--wrong); }
+  .bar-fill.mid { background: var(--hi); }
+  #restart-btn { margin-top: 22px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="brand"><h1>Doc<span class="mark">Quiz</span></h1></div>
+  <p class="tagline">Your notes, turned into a quiz that studies you back.</p>
+
+  <!-- Screen 1: upload -->
+  <div class="card" id="upload-screen">
+    <div class="dropzone" id="dropzone" tabindex="0" role="button"
+         aria-label="Choose a PDF of your notes">
+      <p><strong>Drop a PDF of your notes here</strong></p>
+      <p>or click to browse</p>
+      <p class="file-name" id="file-name"></p>
+    </div>
+    <input type="file" id="pdf-input" accept=".pdf" hidden>
+    <div id="upload-actions">
+      <button id="upload-btn">Generate my quiz</button>
+    </div>
+    <p id="upload-error" class="hidden"></p>
+  </div>
+
+  <!-- Screen 2: generating — the pipeline you built, live -->
+  <div class="card pipeline hidden" id="generating-screen">
+    <p class="pipeline-title">Building your quiz…</p>
+    <div class="stage" data-stage="0"><span class="dot"></span>Reading pages from the PDF</div>
+    <div class="stage" data-stage="1"><span class="dot"></span>Splitting notes into sections</div>
+    <div class="stage" data-stage="2"><span class="dot"></span>Asking the model for questions</div>
+    <div class="stage" data-stage="3"><span class="dot"></span>Saving questions to the database</div>
+  </div>
+
+  <!-- Screen 3: quiz -->
+  <div class="card hidden" id="quiz-screen">
+    <div class="meta">
+      <span class="tag" id="topic-tag"></span>
+      <span class="tag" id="difficulty-tag"></span>
+      <span class="counter" id="counter"></span>
+    </div>
+    <p class="question-text" id="question-text"></p>
+    <div id="options"></div>
+    <p class="keyboard-hint">keys: A B C D answer · Enter next</p>
+    <div class="explanation hidden" id="explanation"></div>
+    <button class="hidden" id="next-btn">Next question</button>
+  </div>
+
+  <!-- Screen 4: done -->
+  <div class="card hidden" id="done-screen">
+    <p class="score-line">Quiz complete — <span class="pct" id="score"></span></p>
+    <p class="weak-line" id="weak-line"></p>
+    <div id="topic-bars"></div>
+    <button id="restart-btn">Start over with another PDF</button>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let currentQuestionId = null;
+let answeredCount = 0;
+let correctCount = 0;
+let totalQuestions = 0;
+
+/* ---------- upload ---------- */
+const dropzone = $("dropzone");
+const input = $("pdf-input");
+
+dropzone.onclick = () => input.click();
+dropzone.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") input.click(); };
+input.onchange = () => showFileName();
+
+dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add("drag"); };
+dropzone.ondragleave = () => dropzone.classList.remove("drag");
+dropzone.ondrop = (e) => {
+  e.preventDefault();
+  dropzone.classList.remove("drag");
+  input.files = e.dataTransfer.files;
+  showFileName();
+};
+
+function showFileName() {
+  const file = input.files[0];
+  $("file-name").textContent = file ? file.name : "";
+  if (file) $("upload-error").classList.add("hidden");
+}
+
+$("upload-btn").onclick = async () => {
+  const file = input.files[0];
+  if (!file) { showUploadError("Pick a PDF first — drop it above or click to browse."); return; }
+
+  $("upload-screen").classList.add("hidden");
+  $("upload-error").classList.add("hidden");
+  showGenerating();
+
+  const form = new FormData();
+  form.append("file", file);
+  try {
+    const res = await fetch("/upload", { method: "POST", body: form });
+    if (!res.ok) {
+      let detail = "Server error — check the uvicorn terminal for the traceback.";
+      try { detail = (await res.json()).detail || detail; } catch {}
+      throw new Error(detail);
+    }
+    finishGenerating();
+    setTimeout(startQuiz, 450);   // let the last checkmark land
+  } catch (err) {
+    stopGenerating();
+    $("upload-screen").classList.remove("hidden");
+    showUploadError(err.message);
+  }
+};
+
+function showUploadError(message) {
+  const el = $("upload-error");
+  el.textContent = message;
+  el.classList.remove("hidden");
+}
+
+/* ---------- generation pipeline ----------
+   First stages are timed guesses; the model call is the slow one, so its
+   stage stays "active" until the server actually answers. */
+let stageTimers = [];
+
+function setStage(i, state) {
+  const el = document.querySelector(`[data-stage="${i}"]`);
+  el.classList.remove("active", "done");
+  if (state) el.classList.add(state);
+}
+
+function showGenerating() {
+  $("generating-screen").classList.remove("hidden");
+  for (let i = 0; i < 4; i++) setStage(i, null);
+  setStage(0, "active");
+  stageTimers = [
+    setTimeout(() => { setStage(0, "done"); setStage(1, "active"); }, 900),
+    setTimeout(() => { setStage(1, "done"); setStage(2, "active"); }, 1700),
+  ];
+}
+
+function finishGenerating() {
+  stageTimers.forEach(clearTimeout);
+  setStage(0, "done"); setStage(1, "done"); setStage(2, "done"); setStage(3, "done");
+}
+
+function stopGenerating() {
+  stageTimers.forEach(clearTimeout);
+  $("generating-screen").classList.add("hidden");
+}
+
+/* ---------- quiz ---------- */
+async function startQuiz() {
+  $("generating-screen").classList.add("hidden");
+  answeredCount = 0;
+  correctCount = 0;
+  const progress = await (await fetch("/progress")).json();
+  totalQuestions = progress.total_questions;
+  loadNextQuestion();
+}
+
+async function loadNextQuestion() {
+  const res = await fetch("/quiz/next");
+  if (!res.ok) {
+    $("quiz-screen").classList.remove("hidden");
+    $("options").innerHTML = "";
+    $("question-text").textContent =
+      "Server error on /quiz/next — check the uvicorn terminal. " +
+      "(Is TODO 8 in adaptive.py filled in?)";
+    return;
+  }
+  const q = await res.json();
+
+  if (q.done) { showDone(); return; }
+
+  currentQuestionId = q.id;
+  $("topic-tag").textContent = q.topic;
+  $("difficulty-tag").textContent = q.difficulty;
+  $("difficulty-tag").className = "tag " + q.difficulty;
+  $("counter").textContent = (answeredCount + 1) + " / " + totalQuestions;
+  $("question-text").textContent = q.question;
+  $("explanation").classList.add("hidden");
+  $("next-btn").classList.add("hidden");
+
+  const optionsDiv = $("options");
+  optionsDiv.innerHTML = "";
+  for (const [letter, text] of Object.entries(q.options)) {
+    const btn = document.createElement("button");
+    btn.className = "option";
+    btn.dataset.letter = letter;
+    btn.innerHTML = "<span class='key'>" + letter + "</span><span></span>";
+    btn.lastChild.textContent = text;
+    btn.onclick = () => submitAnswer(letter, btn);
+    optionsDiv.appendChild(btn);
+  }
+
+  const card = $("quiz-screen");
+  card.classList.remove("hidden", "deal");
+  void card.offsetWidth;          // restart the entrance animation
+  card.classList.add("deal");
+}
+
+async function submitAnswer(letter, clickedBtn) {
+  if (clickedBtn.disabled) return;
+  document.querySelectorAll(".option").forEach(b => b.disabled = true);
+
+  const res = await fetch("/answer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question_id: currentQuestionId, selected: letter }),
+  });
+  const result = await res.json();
+
+  answeredCount++;
+  if (result.correct) correctCount++;
+
+  document.querySelectorAll(".option").forEach(b => {
+    if (b.dataset.letter === result.correct_answer) b.classList.add("correct");
+  });
+  if (!result.correct) clickedBtn.classList.add("wrong");
+
+  const box = $("explanation");
+  box.classList.toggle("nailed", result.correct);
+  box.innerHTML = "<strong>" + (result.correct ? "Correct." : "Not quite.") + "</strong> ";
+  box.append(result.explanation);
+  box.classList.remove("hidden");
+  $("next-btn").classList.remove("hidden");
+  $("next-btn").focus();
+}
+
+$("next-btn").onclick = loadNextQuestion;
+
+/* keyboard: A–D to answer, Enter for next */
+document.addEventListener("keydown", (e) => {
+  if ($("quiz-screen").classList.contains("hidden")) return;
+  const letter = e.key.toUpperCase();
+  if ("ABCD".includes(letter)) {
+    const btn = document.querySelector(`.option[data-letter="${letter}"]`);
+    if (btn && !btn.disabled) btn.click();
+  }
+});
+
+/* ---------- done ---------- */
+async function showDone() {
+  const p = await (await fetch("/progress")).json();
+
+  const pct = p.answered ? Math.round((correctCount / p.answered) * 100) : 0;
+  $("score").textContent = correctCount + " / " + p.answered + " (" + pct + "%)";
+
+  let weakest = null;
+  for (const [topic, s] of Object.entries(p.topics)) {
+    const acc = s.correct / s.total;
+    if (!weakest || acc < weakest.acc) weakest = { topic, acc };
+  }
+  $("weak-line").innerHTML = "";
+  if (weakest && weakest.acc < 1) {
+    $("weak-line").append("Worth another pass: ");
+    const em = document.createElement("em");
+    em.textContent = weakest.topic;
+    $("weak-line").append(em, " — upload the same PDF and go again.");
+  } else {
+    $("weak-line").textContent = "Every topic at 100% — bring harder notes.";
+  }
+
+  const bars = $("topic-bars");
+  bars.innerHTML = "";
+  for (const [topic, s] of Object.entries(p.topics)) {
+    const topicPct = Math.round((s.correct / s.total) * 100);
+    const level = topicPct < 50 ? "low" : topicPct < 80 ? "mid" : "";
+    const row = document.createElement("div");
+    row.className = "topic-row";
+    row.innerHTML =
+      '<div class="topic-name"><span></span><span>' + s.correct + "/" + s.total +
+      '</span></div><div class="bar"><div class="bar-fill ' + level +
+      '" style="width:' + topicPct + '%"></div></div>';
+    row.querySelector(".topic-name span").textContent = topic;
+    bars.appendChild(row);
+  }
+
+  $("quiz-screen").classList.add("hidden");
+  $("done-screen").classList.remove("hidden");
+}
+
+$("restart-btn").onclick = () => location.reload();
+</script>
+</body>
+</html>
