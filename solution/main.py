@@ -1,5 +1,9 @@
 import sys
 from pathlib import Path
+
+# Ensure solution directory is on sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from pdf_service import extract_text_from_pdf, chunk_text
 from llm_service import generate_questions
 

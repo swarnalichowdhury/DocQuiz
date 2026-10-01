@@ -1,5 +1,9 @@
+import sys
 import tempfile
 from pathlib import Path
+
+# Ensure the solution directory is on sys.path so imports work from anywhere
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import FileResponse
@@ -39,11 +43,24 @@ async def upload_pdf(file: UploadFile):
         tmp.write(await file.read())
         tmp_path = tmp.name
 
-    text = extract_text_from_pdf(tmp_path)
+    try:
+        text = extract_text_from_pdf(tmp_path)
+    finally:
+        try:
+            Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+
     if not text:
         raise HTTPException(status_code=400, detail="No text found in PDF (scanned image?)")
+
     chunks = chunk_text(text)
-    questions = generate_questions(chunks)
+    try:
+        questions = generate_questions(chunks)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
 
     db.clear_quiz()  # one active quiz at a time — new upload, fresh start
     count = db.save_questions(questions)

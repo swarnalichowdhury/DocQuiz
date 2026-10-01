@@ -46,6 +46,6 @@ def pick_next_question(unanswered: list[dict], topic_stats: dict[str, dict]) -> 
 
     for difficulty in [desired] + DIFFICULTY_ORDER:
         for q in candidates:
-            if q["difficulty"] == difficulty:
+            if q["difficulty"].lower() == difficulty:
                 return q
     return candidates[0]

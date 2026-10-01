@@ -54,6 +54,10 @@ def save_questions(questions: list[dict]) -> int:
     """
     with get_connection() as conn:
         for q in questions:
+            diff = str(q.get("difficulty", "medium")).lower().strip()
+            if diff not in ("easy", "medium", "hard"):
+                diff = "medium"
+            correct = str(q.get("correct_answer", "A")).upper().strip()
             conn.execute(
                 """INSERT INTO questions
                    (question, options_json, correct_answer, explanation, difficulty, topic)
@@ -61,9 +65,9 @@ def save_questions(questions: list[dict]) -> int:
                 (
                     q["question"],
                     json.dumps(q["options"]),
-                    q["correct_answer"],
+                    correct,
                     q["explanation"],
-                    q["difficulty"],
+                    diff,
                     q["topic"],
                 ),
             )

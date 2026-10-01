@@ -8,3 +8,6 @@ venv/
 instructor/
 *.db
 .playwright-mcp/
+*tempCodeRunnerFile*
+.vscode/
+.idea/
