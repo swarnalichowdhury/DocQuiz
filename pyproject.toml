@@ -1,2 +1,15 @@
+[project]
+name = "docquiz"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pdfplumber",
+    "groq",
+    "python-dotenv",
+    "python-multipart",
+]
+
 [tool.vercel]
 entrypoint = "solution.app:app"
